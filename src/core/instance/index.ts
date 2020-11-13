@@ -1,31 +1,10 @@
 import Watcher from "../observer/watcher";
-import Dep from "../observer/dep";
+import {noop} from "../common/constant";
 
 interface SimpleVueOptions {
     data: () => { [key: string]: any },
-    watch: { [key: string]: (newValue?: any, oldValue?: any) => void }
-}
-
-const WatcherMap = new Map<string, Watcher[]>()
-
-function bookWatcher(key) {
-    let newWatcher = Dep.target
-    let watchers = WatcherMap.get(key)
-
-    if (!newWatcher) return
-
-    if (watchers) {
-        watchers.push(newWatcher)
-    } else {
-        WatcherMap.set(key, [newWatcher])
-    }
-}
-
-function notifyWatchers(key) {
-    let watchers = WatcherMap.get(key)
-    if (watchers) {
-        watchers.forEach(watcher => watcher.update())
-    }
+    watch?: { [key: string]: (newValue?: any, oldValue?: any) => void }
+    computed?: { [key: string]: Function }
 }
 
 /**
@@ -39,7 +18,7 @@ export default class Vue {
         this.$options = options
 
         this.initData()
-
+        this.initComputed()
         this.initWatch()
     }
 
@@ -59,17 +38,18 @@ export default class Vue {
         // 实现vm.a，将data中的字段，映射到vm上
         // TODO 很明显，这样的写法只能处理原始类型值，数组和对象现在无法处理，Observer类将用于此处
         keys.forEach(key => {
+            let watchers: Watcher[] = []
             Object.defineProperty(this, key, {
                 get() {
                     // Watcher实例watcher观察vm.a，理论上这里需要得到watcher实例
                     // 还需要一个订阅者列表来记录登记在Dep.target上的watcher
-                    bookWatcher(key)
+                    Watcher.target && watchers.push(Watcher.target)
                     return this.$data[key]
                 },
                 set(v: any) {
                     this.$data[key] = v
                     // 通知观察这个key的watcher，watcher响应目标变化的动作是update这个不能忘记
-                    notifyWatchers(key)
+                    watchers.forEach(watcher => watcher.update())
                 }
             })
         })
@@ -79,10 +59,32 @@ export default class Vue {
      * 处理options中的watch部分
      */
     initWatch() {
-        let keys = Object.keys(this.$options.watch)
+        let watches = this.$options.watch
+        if (!watches) return
+        let keys = Object.keys(watches)
 
         keys.forEach(key => {
-            new Watcher(this, key, this.$options.watch[key])
+            new Watcher(this, key, watches[key])
         })
+    }
+
+    /**
+     * 处理options中的computed部分
+     */
+    initComputed() {
+        let computed = this.$options.computed
+
+        if (!computed) return
+
+        for (let key in computed) {
+            const fn = computed[key]
+            const computedWatcher = new Watcher(this, fn, noop)
+            Object.defineProperty(this, key, {
+                get() {
+                    Watcher.target && computedWatcher.addWatcher(Watcher.target)
+                    return computedWatcher.get()
+                }
+            })
+        }
     }
 }

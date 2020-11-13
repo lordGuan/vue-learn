@@ -1,5 +1,17 @@
-import {popTarget, pushTarget} from "./dep";
 import Vue from "../instance";
+import {noop} from "../common/constant";
+
+/**
+ * 记录正在求值的观察者
+ * @param target
+ */
+export function pushTarget(target: Watcher) {
+    Watcher.target = target
+}
+
+export function popTarget() {
+    Watcher.target = null
+}
 
 /**
  * 仿写并分析Vue中Watcher的工作方式
@@ -7,8 +19,11 @@ import Vue from "../instance";
 export default class Watcher {
     vm: Vue
     cb: Function
-    expOrFn: string
+    expOrFn: string | Function
     value: any
+    getter: Function
+    watchers: Watcher[]
+    static target: Watcher
 
     /**
      * 白话描述：观察vm上的expOrFn（先考虑字段），当其发生变化时，在vm上下文执行cb
@@ -17,15 +32,34 @@ export default class Watcher {
      * @param expOrFn
      * @param cb
      */
-    constructor(vm: Vue, expOrFn: string, cb: Function) {
+    constructor(vm: Vue, expOrFn: string | Function, cb: Function) {
         this.vm = vm
         this.expOrFn = expOrFn
         this.cb = cb
+        this.watchers = []
+
+        // 将要观察的目标，不管是单一属性，还是计算过程（相当于一组属性）
+        // 统一化保存起来
+        if (typeof expOrFn === 'string') {
+            // 将观察单一属性的要求，也转换成一个计算过程
+            this.getter = function () {
+                return this[expOrFn]
+            }
+        }
+
+        if (typeof expOrFn === 'function') {
+            this.getter = expOrFn
+        }
+
+        // 兜底
+        if (!this.getter) {
+            this.getter = noop
+        }
 
         // 已知对vm.expOrFn进行求值相当于一个订阅
         // 先把自身记录在一个全局的范围内，标记自己是正在求值的观察者
         pushTarget(this)
-        this.value = this.vm[expOrFn]
+        this.value = this.get()
         popTarget()
     }
 
@@ -35,13 +69,27 @@ export default class Watcher {
      */
     update() {
         // 取得观察目标的新值
-        const value = this.vm[this.expOrFn]
+        const newValue = this.get()
 
         // 更新值
         const oldValue = this.value
-        this.value = value
+        this.value = newValue
 
-        // 触发cb
-        this.cb.call(this.vm, value, oldValue)
+        if (newValue !== oldValue) {
+            // 仅在结果发生变化时触发cb，减少不必要的动作
+            this.cb.call(this.vm, newValue, oldValue)
+        }
+    }
+
+    /**
+     * 求观察目标的值
+     * 由于已经将expOrFn转化成统一的形式，这里只需要合理的call一下
+     */
+    get() {
+        return this.getter.call(this.vm)
+    }
+
+    addWatcher(watcher: Watcher) {
+        this.watchers.push(watcher)
     }
 }
