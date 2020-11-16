@@ -8,9 +8,7 @@ import Watcher from "./watcher";
 export function observe(value: any) {
     if (Array.isArray(value)) {
         observeArray(value)
-    }
-
-    if (typeof value === 'object' && value !== null) {
+    } else if (typeof value === 'object' && value !== null) {
         observeObject(value)
     }
 }
@@ -27,6 +25,14 @@ function observeObject(value: any) {
 }
 
 function observeArray(value: any[]) {
+    const oldPush = Array.prototype.push
+    Object.defineProperty(value, 'push', {
+        value: function (...args) {
+            const watchers: Watcher[] = this['watchers']
+            oldPush.apply(this, args)
+            watchers.forEach(watcher => watcher.update())
+        }
+    })
     for (let i = 0; i < value.length; i++) {
         let val = value[i]
         defineProperty(value, i, val)
@@ -36,6 +42,7 @@ function observeArray(value: any[]) {
 
 function defineProperty(target, key, val) {
     let watchers: Watcher[] = []
+    if (Array.isArray(val)) val['watchers'] = watchers
     Object.defineProperty(target, key, {
         get() {
             Watcher.target && watchers.push(Watcher.target)

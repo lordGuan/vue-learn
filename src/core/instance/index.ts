@@ -5,7 +5,8 @@ import {observe} from "../observer";
 interface SimpleVueOptions {
     data: () => { [key: string]: any },
     watch?: { [key: string]: (newValue?: any, oldValue?: any) => void }
-    computed?: { [key: string]: Function }
+    computed?: { [key: string]: Function },
+    mounted?: Function
 }
 
 /**
@@ -77,6 +78,16 @@ export default class Vue {
                     return computedWatcher.get()
                 }
             })
+        }
+    }
+
+    /**
+     * 模拟挂载组件，这里只是为了触发hook
+     */
+    $mount() {
+        const mounted = this.$options.mounted
+        if (mounted) {
+            mounted.call(this)
         }
     }
 }
