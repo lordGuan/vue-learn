@@ -1,10 +1,11 @@
-import Watcher from "../observer/watcher";
+import Watcher, {WatchHandler, WatchOptions, WatchOptionsWithHandler} from "../observer/watcher";
 import {noop} from "../common/constant";
 import {observe} from "../observer";
 
+
 interface SimpleVueOptions {
     data: () => { [key: string]: any },
-    watch?: { [key: string]: (newValue?: any, oldValue?: any) => void }
+    watch?: { [key: string]: WatchHandler | WatchOptionsWithHandler }
     computed?: { [key: string]: Function },
     mounted?: Function
 }
@@ -13,6 +14,7 @@ interface SimpleVueOptions {
  * 模拟Vue实例，为了演示Watcher的工作，只实现data属性和watch属性的处理
  */
 export default class Vue {
+    [x: string]: any;
     $options: SimpleVueOptions
     _data: { [key: string]: any }
 
@@ -57,7 +59,15 @@ export default class Vue {
         let keys = Object.keys(watches)
 
         keys.forEach(key => {
-            new Watcher(this, key, watches[key])
+            // 如果是对象式配置
+            let option = watches[key]
+            if (option !== null && typeof option === 'object') {
+                this.$watch(key, option.handler, {deep: option.deep})
+            }
+
+            if (option instanceof Function) {
+                this.$watch(key, option)
+            }
         })
     }
 
@@ -89,5 +99,9 @@ export default class Vue {
         if (mounted) {
             mounted.call(this)
         }
+    }
+
+    $watch(expOrFn: string | Function, cb: Function, options?: WatchOptions) {
+        new Watcher(this, expOrFn, cb, options)
     }
 }

@@ -1,5 +1,18 @@
 import Vue from "../instance";
 import {noop} from "../common/constant";
+import {traverse} from "./traverse";
+
+export interface WatchOptions {
+    deep: boolean
+}
+
+export interface WatchHandler {
+    (newValue?: any, oldValue?: any): void
+}
+
+export interface WatchOptionsWithHandler extends WatchOptions {
+    handler: WatchHandler,
+}
 
 /**
  * 记录正在求值的观察者
@@ -23,6 +36,7 @@ export default class Watcher {
     value: any
     getter: Function
     watchers: Watcher[]
+    deep: boolean
     static target: Watcher
 
     /**
@@ -31,12 +45,18 @@ export default class Watcher {
      * @param vm
      * @param expOrFn
      * @param cb
+     * @param options
      */
-    constructor(vm: Vue, expOrFn: string | Function, cb: Function) {
+    constructor(vm: Vue, expOrFn: string | Function, cb: Function, options?: WatchOptions) {
         this.vm = vm
         this.expOrFn = expOrFn
         this.cb = cb
         this.watchers = []
+        if (options) {
+            this.deep = !!options.deep
+        } else {
+            this.deep = false
+        }
 
         // 将要观察的目标，不管是单一属性，还是计算过程（相当于一组属性）
         // 统一化保存起来
@@ -75,7 +95,8 @@ export default class Watcher {
         const oldValue = this.value
         this.value = newValue
 
-        if (newValue !== oldValue) {
+        // 考虑deep
+        if (newValue !== oldValue || this.deep) {
             // 仅在结果发生变化时触发cb，减少不必要的动作
             this.cb.call(this.vm, newValue, oldValue)
         }
@@ -86,7 +107,13 @@ export default class Watcher {
      * 由于已经将expOrFn转化成统一的形式，这里只需要合理的call一下
      */
     get() {
-        return this.getter.call(this.vm)
+        let value = this.getter.call(this.vm)
+        if (this.deep) {
+            // 遍历这个value，普通类型就无所谓了
+            // 数组是循环，对象
+            traverse(value)
+        }
+        return value
     }
 
     addWatcher(watcher: Watcher) {
