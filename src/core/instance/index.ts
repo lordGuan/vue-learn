@@ -1,6 +1,7 @@
 import Watcher, {WatchHandler, WatchOptions, WatchOptionsWithHandler} from "../observer/watcher";
 import {noop} from "../common/constant";
 import {observe} from "../observer";
+import Dep from "../observer/dep";
 
 
 interface SimpleVueOptions {
@@ -15,6 +16,7 @@ interface SimpleVueOptions {
  */
 export default class Vue {
     [x: string]: any;
+
     $options: SimpleVueOptions
     _data: { [key: string]: any }
 
@@ -84,8 +86,10 @@ export default class Vue {
             const computedWatcher = new Watcher(this, fn, noop)
             Object.defineProperty(this, key, {
                 get() {
-                    Watcher.target && computedWatcher.addWatcher(Watcher.target)
-                    return computedWatcher.get()
+                    if (Dep.target) {
+                        computedWatcher.depend()
+                    }
+                    return computedWatcher.value
                 }
             })
         }
@@ -101,7 +105,12 @@ export default class Vue {
         }
     }
 
-    $watch(expOrFn: string | Function, cb: Function, options?: WatchOptions) {
-        new Watcher(this, expOrFn, cb, options)
+    $watch(expOrFn: string | Function, cb: Function, options?: WatchOptions): Function {
+        const watcher = new Watcher(this, expOrFn, cb, options)
+
+        return function unwatch() {
+            // 取消观察关系
+            watcher.teardown()
+        }
     }
 }

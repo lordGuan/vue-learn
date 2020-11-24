@@ -6,6 +6,41 @@ import Watcher from "./watcher";
 
 export default class Dep {
     static target: Watcher
+    subs: Watcher[]
+
+    constructor() {
+        this.subs = []
+    }
+
+    /**
+     * 保存观察者
+     * @param sub
+     */
+    addSub(sub: Watcher) {
+        this.subs.push(sub)
+    }
+
+    removeSub(sub: Watcher) {
+        let index = this.subs.indexOf(sub)
+        if (index > -1) {
+            this.subs.splice(index, 1)
+        }
+    }
+
+    depend() {
+        if (Dep.target) {
+            Dep.target.addDep(this)
+        }
+    }
+
+    /**
+     * 通知
+     */
+    notify() {
+        this.subs.forEach(sub => {
+            sub.update()
+        })
+    }
 }
 
 /**

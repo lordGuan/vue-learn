@@ -1,6 +1,7 @@
 import Vue from "../instance";
 import {noop} from "../common/constant";
 import {traverse} from "./traverse";
+import Dep, {popTarget, pushTarget} from "./dep";
 
 export interface WatchOptions {
     deep: boolean
@@ -15,18 +16,6 @@ export interface WatchOptionsWithHandler extends WatchOptions {
 }
 
 /**
- * 记录正在求值的观察者
- * @param target
- */
-export function pushTarget(target: Watcher) {
-    Watcher.target = target
-}
-
-export function popTarget() {
-    Watcher.target = null
-}
-
-/**
  * 仿写并分析Vue中Watcher的工作方式
  */
 export default class Watcher {
@@ -35,9 +24,8 @@ export default class Watcher {
     expOrFn: string | Function
     value: any
     getter: Function
-    watchers: Watcher[]
+    deps: Dep[]
     deep: boolean
-    static target: Watcher
 
     /**
      * 白话描述：观察vm上的expOrFn（先考虑字段），当其发生变化时，在vm上下文执行cb
@@ -51,7 +39,7 @@ export default class Watcher {
         this.vm = vm
         this.expOrFn = expOrFn
         this.cb = cb
-        this.watchers = []
+        this.deps = []
         if (options) {
             this.deep = !!options.deep
         } else {
@@ -116,7 +104,20 @@ export default class Watcher {
         return value
     }
 
-    addWatcher(watcher: Watcher) {
-        this.watchers.push(watcher)
+    addDep(dep: Dep) {
+        this.deps.push(dep)
+        dep.addSub(this)
+    }
+
+    depend() {
+        this.deps.forEach(dep => {
+            dep.depend()
+        })
+    }
+
+    teardown() {
+        this.deps.forEach(dep => {
+            dep.removeSub(this)
+        })
     }
 }

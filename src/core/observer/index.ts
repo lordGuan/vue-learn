@@ -3,7 +3,7 @@
  *  为了解决$data的问题，也就是Vue实例的数据源问题
  *  同时处理引用类型的数据字段和数组类型的数据字段
  */
-import Watcher from "./watcher";
+import Dep from "./dep"
 
 export function observe(value: any) {
     if (Array.isArray(value)) {
@@ -28,9 +28,9 @@ function observeArray(value: any[]) {
     const oldPush = Array.prototype.push
     Object.defineProperty(value, 'push', {
         value: function (...args) {
-            const watchers: Watcher[] = this['watchers']
+            const dep: Dep = this['watchers']
             oldPush.apply(this, args)
-            watchers.forEach(watcher => watcher.update())
+            dep.notify()
         }
     })
     for (let i = 0; i < value.length; i++) {
@@ -41,16 +41,17 @@ function observeArray(value: any[]) {
 }
 
 function defineProperty(target, key, val) {
-    let watchers: Watcher[] = []
-    if (Array.isArray(val)) val['watchers'] = watchers
+    let dep = new Dep()
+    if (Array.isArray(val)) val['watchers'] = dep
     Object.defineProperty(target, key, {
         get() {
-            Watcher.target && watchers.push(Watcher.target)
+            // 有观察者
+            dep.depend()
             return val
         },
         set(v) {
             val = v
-            watchers.forEach(watcher => watcher.update())
+            dep.notify()
         }
     })
 }
